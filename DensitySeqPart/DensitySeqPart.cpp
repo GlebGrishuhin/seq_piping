@@ -15,13 +15,13 @@ struct ro_problem
     int method = 0;
     double D = 0.1, // Внешний диаметр трубы, м
         d = 0.008, // Толщина стенок трубы, м
-        Q = 0.1,   // Объемный расход, м3/c
-        maxT = 200, // Время моделирования
-        L = 100, // Длина участка трубы
-        xStep = 10,// Шаг сетки по координате
+        Q = 1,   // Объемный расход, м3/c
+        maxT = 20, // Время моделирования
+        L = 10000, // Длина участка трубы
+        xStep = 100,// Шаг сетки по координате
         dt, // Шаг сетки по времени
-        ro_left = 840, // Граничное условие при (0, t)
-        ro_right = 860; // Граничное условие при (L, t)
+        ro_left = 860, // Граничное условие при (0, t)
+        ro_right = 0; // Граничное условие при (L, t)
    vector<double> result; // Расчетный слой
 
 };
@@ -113,30 +113,6 @@ void calc_ro_problem(ro_problem& problem, bool verbose = false)
         // Расчет уголком
             case 1:
             {
-                double sigma = problem.dt / problem.xStep;
-                if (!isReverse)
-                {
-                    transform(
-                        problem.result.begin(), // начало L1
-                        problem.result.end() - 1,   // Вектор точек на одну назад; Размер совпадает с размером результата
-                        problem.result.begin() + 1,
-                        temp.begin() + 1,
-                        [&sigma](double a, double b) { return (sigma * a) + ((1 - sigma) * b); }
-                    );
-                    temp[0] = problem.ro_left;
-                }
-                else
-                {
-                    transform(
-                        problem.result.begin() + 1, // начало L1
-                        problem.result.end(),   // Вектор точек на одну назад; Размер совпадает с размером результата
-                        problem.result.begin(),
-                        temp.begin(),
-                        [&sigma](double a, double b) { return (sigma * a) + ((1.0 - sigma) * b); }
-                    );
-                    temp.pop_back();
-                    temp.push_back(problem.ro_right);
-                }
                 break;
             }       
         }
@@ -173,6 +149,6 @@ int main()
     printf("Время расчета: %.2fs\n", (double)(clock() - tStart) / CLOCKS_PER_SEC);
 
     // Вызов скрипта построения графиков
-    //system("py PlotPrecomputedGraph.py");
+    system("py PlotPrecomputedGraph.py");
     return 0;
 }

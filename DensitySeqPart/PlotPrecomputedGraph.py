@@ -25,5 +25,5 @@ limY = [min(y) - 0.1 * (max(y) - min(y)), max(y) + 0.1 * (max(y) - min(y))]
 
 N = len(set(x))
 
-anim = animation.FuncAnimation(fig, animate, frames=len(set(t)), interval=100, repeat=True)
+anim = animation.FuncAnimation(fig, animate, frames=len(set(t)), interval=100, repeat=False)
 plt.show()
