@@ -1,7 +1,6 @@
 ﻿  DensitySeqPart.cpp
-D:\Diplom_Mag\DensitySeqPart\DensitySeqPart\DensitySeqPart.cpp(63,23): warning C4244: 'initializing': conversion from 'double' to 'int', possible loss of data
-D:\Diplom_Mag\DensitySeqPart\DensitySeqPart\DensitySeqPart.cpp(64,22): warning C4244: 'initializing': conversion from 'double' to 'int', possible loss of data
-D:\Diplom_Mag\DensitySeqPart\DensitySeqPart\DensitySeqPart.cpp(123,32): warning C4477: 'printf' : format string '%d' requires an argument of type 'int', but variadic argument 1 has type 'size_t'
-D:\Diplom_Mag\DensitySeqPart\DensitySeqPart\DensitySeqPart.cpp(123,32): message : consider using '%zd' in the format string
-D:\Diplom_Mag\DensitySeqPart\DensitySeqPart\DensitySeqPart.cpp(129,42): warning C4267: 'argument': conversion from 'size_t' to 'int', possible loss of data
+D:\Diplom_Mag\DensitySeqPart\DensitySeqPart\DensitySeqPart.cpp(38,76): warning C4244: 'argument': conversion from 'double' to 'const unsigned __int64', possible loss of data
+D:\Diplom_Mag\DensitySeqPart\DensitySeqPart\DensitySeqPart.cpp(178,22): warning C4244: 'initializing': conversion from 'double' to 'int', possible loss of data
+D:\Diplom_Mag\DensitySeqPart\DensitySeqPart\DensitySeqPart.cpp(189,51): warning C4267: 'argument': conversion from 'size_t' to 'int', possible loss of data
+D:\Diplom_Mag\DensitySeqPart\DensitySeqPart\DensitySeqPart.cpp(191,44): warning C4267: 'argument': conversion from 'size_t' to 'int', possible loss of data
   DensitySeqPart.vcxproj -> D:\Diplom_Mag\DensitySeqPart\x64\Debug\DensitySeqPart.exe
