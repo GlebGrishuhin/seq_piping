@@ -12,25 +12,23 @@ using namespace std;
 
 typedef composite_layer_t<profile_collection_t<1>, moc_solver<1>::specific_layer> single_var_moc_t;
 
-double const PI = 3.1415;
-
-
-// Решаемая задача
+/// @brief Структура для определения плотности при последовательной перекачке
 struct ro_problem
 {
-    string quantity = "Плотность";
-    int method = 0;
+    string quantity = "Плотность"; // Рассчитываемый параметр
+    int method = 0; // Метод решения: 0 - перенос по самоподобию, 1 - уголок
     double D = 0.1; // Внешний диаметр трубы, м
     double d = 0.008; // Толщина стенок трубы; м
     double Q = 0.01;   // Объемный расход; м3/c
-    double maxT = 3600; // Время моделирования
+    double maxT = 600; // Время моделирования
     double L = 10000; // Длина участка трубы
     double xStep = 100;// Шаг сетки по координате
-    double dt = xStep / abs(4.0 * Q / (PI * (D - d) * (D - d))); // Шаг сетки по времени
-    double ro_left = 860; // Граничное условие при (0; t)
-    double ro_right = 860; // Граничное условие при (L; t)
-    double ro_init = 850;
+    double ro_left = 860; // Граничное условие (0; t)
+    double ro_right = 860; // Граничное условие (L; t)
+    double ro_init = 850; // Начальное условие (x, 0)
 
+    /// @brief Заполняет текущий слой начальным условием
+    /// @param buffer Ссылка на буферы
     void set_initial_layer(custom_buffer_t<single_var_moc_t>& buffer)
     {
         buffer.current().vars.point_double[0] = vector<double>((L / xStep) + 1, ro_init);
@@ -76,10 +74,12 @@ void step_self_sim(ro_problem& problem, single_var_moc_t& curr, single_var_moc_t
 /// @param prev Ссылка на предыдущий слой в буфере
 void step_corner(ro_problem& problem, single_var_moc_t& curr, single_var_moc_t& prev)
 {
+    double sigma = 1 / abs(4 * problem.Q / (M_PI * pow(problem.D - problem.d, 2)));
+    
     vector<double>& layer = curr.vars.point_double[0];
     vector<double>& prev_layer = prev.vars.point_double[0];
     
-    double sigma = problem.dt / problem.xStep;
+    
     if (problem.Q > 0)
     {
         transform(
@@ -112,11 +112,12 @@ void step_corner(ro_problem& problem, single_var_moc_t& curr, single_var_moc_t& 
 /// @param step Шаг моделирования
 void layer_to_console(ro_problem& problem, single_var_moc_t& curr, int step)
 {
+    double dt = problem.xStep / abs(4 * problem.Q / (M_PI * pow(problem.D - problem.d, 2)));
     vector<double>& layer = curr.vars.point_double[0];
     for (size_t i = 0; i < layer.size(); i++)
             printf("Шаг = %d    t = %.3F    x = %.3F    ro = %.3F\n",
                 step,
-                step * problem.dt,
+                step * dt,
                 i * problem.xStep,
                 layer[i]);
 }
@@ -126,14 +127,15 @@ void layer_to_console(ro_problem& problem, single_var_moc_t& curr, int step)
 /// @param problem Ссылка на структуру ro_problem
 void task_to_console(ro_problem& problem)
 {
+    double dt = problem.xStep / abs(4 * problem.Q / (M_PI * pow(problem.D - problem.d, 2)));
     cout << "===== Описание задачи ===== " << endl;
     cout << "Рассчитываемая величина = " << problem.quantity << endl;
     cout << "Длина трубы = " << problem.L << endl;
     cout << "Время моделирования = " << problem.maxT << endl;
-    cout << "Скорость потока = " << abs(4.0 * problem.Q / (PI * (problem.D - problem.d) * (problem.D - problem.d))) << endl;
+    cout << "Скорость потока = " << abs(4 * problem.Q / (M_PI * pow(problem.D - problem.d, 2))) << endl;
     cout << "Шаг по координате = " << problem.xStep << endl;
-    cout << "Шаг во времени = " << problem.dt << endl;
-    cout << "Число узлов по времени = " << (int)(problem.maxT / problem.dt) << endl;
+    cout << "Шаг во времени = " << dt << endl;
+    cout << "Число узлов по времени = " << (int)(problem.maxT / dt) << endl;
     cout << "Число узлов по координате = " << (problem.L / problem.xStep) + 1 << endl;
     cout << "=========================== " << endl;
 }
@@ -146,6 +148,7 @@ void task_to_console(ro_problem& problem)
 /// @param filename Имя файла
 void layer_to_file(ro_problem& problem, single_var_moc_t& curr, int step, string filename = "data.txt")
 {
+    double dt = problem.xStep / abs(4 * problem.Q / (M_PI * pow(problem.D - problem.d, 2)));
     vector<double>& layer = curr.vars.point_double[0];
     std::ofstream out;
     if (step == 0)
@@ -155,54 +158,52 @@ void layer_to_file(ro_problem& problem, single_var_moc_t& curr, int step, string
     if (out.is_open())
         for (size_t i = 0; i < layer.size(); i++)
         {
-            out << step * problem.dt << ',' << i * problem.xStep << ',' << layer[i] << endl;
+            out << step * dt << ',' << i * problem.xStep << ',' << layer[i] << endl;
         }
     out.close();
 }
 
 
-/// @brief Расчет плотности
+/// @brief Оболочка для цикла расчета плотности за время maxT
 /// @param problem Ссылка на структуру ro_problem
 /// @param buffer Ссылка на буфер
 /// @param verbose Флаг вывода в консоль
-void calc_ro_problem(ro_problem& problem, custom_buffer_t<single_var_moc_t>& buffer, int method, bool verbose = false)
+void calc_ro_problem(ro_problem& problem, custom_buffer_t<single_var_moc_t>& buffer)
 {
     // Начальное значение параметра
     problem.set_initial_layer(buffer);
-    
-    int numStepsTime = (problem.maxT / problem.dt);
 
-    // Расчет слоев 
+    // Определение числа слоев, которые нужно рассчитать
+    double dt = problem.xStep / abs(4 * problem.Q / (M_PI * pow(problem.D - problem.d, 2)));
+    int numStepsTime = (problem.maxT / dt);
+    
+    // Вывод начальных условий и параметров потока нефтепродуктов
+    task_to_console(problem);
+
+    // Цикл расчета слоев 
     for (size_t step = 0; step <= numStepsTime; step++)
     {
-        if (verbose)
-        {
-            if (step == 0)
-            {
-                task_to_console(problem);
-            }
-            layer_to_console(problem, buffer.current(), step);
-        }
-        single_var_moc_t curr = buffer.current();
-        single_var_moc_t prev = buffer.previous();
-
+        // Вывод текущего слоя в консоль
+        layer_to_console(problem, buffer.current(), step);
+        
+        //Запись текущего слоя в файл
         layer_to_file(problem, buffer.current(), step);
+        
         buffer.advance(1);
 
-        switch (method)
+        switch (problem.method)
         {
-        case 0:
-        {
-            step_self_sim(problem, buffer.current(), buffer.previous());
-            break;
+            case 0:
+            {
+                step_self_sim(problem, buffer.current(), buffer.previous());
+                break;
+            }
+            case 1:
+            {
+                step_corner(problem, buffer.current(), buffer.previous());
+                break;
+            }
         }
-        case 1:
-        {
-            step_corner(problem, buffer.current(), buffer.previous());
-            break;
-        }
-        }
-        
     }
 }
 
@@ -222,12 +223,12 @@ int main()
     custom_buffer_t<single_var_moc_t> buffer(2, int(problem.L / problem.xStep) + 1);
 
     // Решение задачи
-    calc_ro_problem(problem, buffer, 1, true);
+    calc_ro_problem(problem, buffer);
 
     printf("Время расчета: %.2fs\n", (double)(clock() - tStart) / CLOCKS_PER_SEC);
 
     // Вызов скрипта построения графиков
-    //system("py PlotPrecomputedGraph.py");
+    system("py PlotPrecomputedGraph.py");
 
     return 0;
 }
