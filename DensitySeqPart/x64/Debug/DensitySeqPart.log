@@ -1,6 +1,5 @@
 ﻿  DensitySeqPart.cpp
-D:\Diplom_Mag\DensitySeqPart\DensitySeqPart\DensitySeqPart.cpp(34,76): warning C4244: 'argument': conversion from 'double' to 'const unsigned __int64', possible loss of data
-D:\Diplom_Mag\DensitySeqPart\DensitySeqPart\DensitySeqPart.cpp(178,22): warning C4244: 'initializing': conversion from 'double' to 'int', possible loss of data
-D:\Diplom_Mag\DensitySeqPart\DensitySeqPart\DensitySeqPart.cpp(187,57): warning C4267: 'argument': conversion from 'size_t' to 'int', possible loss of data
-D:\Diplom_Mag\DensitySeqPart\DensitySeqPart\DensitySeqPart.cpp(190,54): warning C4267: 'argument': conversion from 'size_t' to 'int', possible loss of data
-  DensitySeqPart.vcxproj -> D:\Diplom_Mag\DensitySeqPart\x64\Debug\DensitySeqPart.exe
+D:\Diplom_Mag\DensitySeqPart\DensitySeqPart\DensitySeqPart.cpp(187,54): error C3688: invalid literal suffix 'endl'; literal operator or literal operator template 'operator ""endl' not found
+D:\Diplom_Mag\DensitySeqPart\DensitySeqPart\DensitySeqPart.cpp(227,22): warning C4244: 'initializing': conversion from 'double' to 'int', possible loss of data
+D:\Diplom_Mag\DensitySeqPart\DensitySeqPart\DensitySeqPart.cpp(248,65): warning C4267: 'argument': conversion from 'size_t' to 'int', possible loss of data
+D:\Diplom_Mag\DensitySeqPart\DensitySeqPart\DensitySeqPart.cpp(249,62): warning C4267: 'argument': conversion from 'size_t' to 'int', possible loss of data

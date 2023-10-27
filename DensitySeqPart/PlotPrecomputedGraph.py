@@ -1,29 +1,43 @@
-from matplotlib import pyplot as plt
-from matplotlib import animation
+import numpy as np
+import pandas as pd
+from matplotlib.animation import FuncAnimation
+import matplotlib.pyplot as plt
 
-
-def animate(n):
-    plt.cla()
-    plt.autoscale(enable=False)
-    plt.grid(visible=True)
-    ax.set_xlim(limX)
-    ax.set_ylim(limY)    
-    line = plt.plot(x[n * N: (n + 1) * N], y[n * N: (n + 1) * N], color='b')
-    #print('x=', *x[n * N: (n + 1) * N])
-    #print('y=', *y[n * N: (n + 1) * N])
-    return line
-
+rawData = pd.read_csv('data.txt', encoding='windows-1251')
+parametersNames = rawData.columns.tolist()[2:]
+[timeLabel, coordLabel] = rawData.columns.tolist()[:2]
+plotsCount = len(parametersNames)
 
 fig = plt.figure()
-ax = plt.gca()
+axes = [plt.subplot(plotsCount, 1, _ + 1) for _ in range(plotsCount)]
 
-with open('data.txt') as fobj:
-    t, x, y = zip(*([float(i) for i in line.split(',')] for line in fobj))
-    
-limX = [min(x) - 0.1 * (max(x) - min(x)), max(x) + 0.1 * (max(x) - min(x))]
-limY = [min(y) - 0.1 * (max(y) - min(y)), max(y) + 0.1 * (max(y) - min(y))]
+data_skip = len(set(rawData[coordLabel]))
 
-N = len(set(x))
+def init_func():
+    for i in range(len(axes)):
+        axes[i].clear()
+        axes[i].grid(visible=True)
+        axes[i].set_xlabel(coordLabel)
+        axes[i].set_ylabel(parametersNames[i])
+        coordData = rawData[coordLabel]
+        paramData = rawData[parametersNames[i]]
+        xLim = [min(coordData) - 0.1 * (max(coordData) - min(coordData)), max(coordData) + 0.1 * (max(coordData) - min(coordData))]
+        yLim = [min(paramData) - 0.1 * (max(paramData) - min(paramData)), max(paramData) + 0.1 * (max(paramData) - min(paramData))]
+        axes[i].set_xlim(xLim)
+        axes[i].set_ylim(yLim)
 
-anim = animation.FuncAnimation(fig, animate, frames=len(set(t)), interval=100, repeat=False)
+
+def update_plot(i):
+    init_func()
+    for j in range(len(axes)):
+        coordData = rawData[coordLabel]
+        paramData = rawData[parametersNames[j]]
+        axes[j].plot(coordData[i * data_skip: (i + 1) * data_skip], paramData[i * data_skip: (i + 1) * data_skip], color='k')
+
+anim = FuncAnimation(fig,
+                     update_plot,
+                     frames=len(set(rawData[timeLabel])),
+                     init_func=init_func,
+                     interval=100, repeat=False)
+
 plt.show()

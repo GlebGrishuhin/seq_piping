@@ -10,225 +10,275 @@
 
 using namespace std;
 
-typedef composite_layer_t<profile_collection_t<1>, moc_solver<1>::specific_layer> single_var_moc_t;
+const int num_params = 2;
+typedef profile_collection_t<num_params> many_profiles;
+typedef vector<double> layer;
 
-/// @brief Структура для определения плотности при последовательной перекачке
-struct ro_problem
+/// @brief  Физические и модельные характеристики трубы
+struct PipeModel
 {
-    string quantity = "Плотность"; // Рассчитываемый параметр
-    int method = 0; // Метод решения: 0 - перенос по самоподобию, 1 - уголок
     double D = 0.1; // Внешний диаметр трубы, м
     double d = 0.008; // Толщина стенок трубы; м
     double Q = 0.01;   // Объемный расход; м3/c
-    double maxT = 600; // Время моделирования
     double L = 10000; // Длина участка трубы
-    double xStep = 100;// Шаг сетки по координате
-    double ro_left = 860; // Граничное условие (0; t)
-    double ro_right = 860; // Граничное условие (L; t)
-    double ro_init = 850; // Начальное условие (x, 0)
+    double V; // Скорость потока
+    double maxT = 600; // Время моделирования
+    double dx = 100;// Шаг по координате
+    double dt; // Шаг по времени
 
-    /// @brief Заполняет текущий слой начальным условием
-    /// @param buffer Ссылка на буферы
-    void set_initial_layer(custom_buffer_t<single_var_moc_t>& buffer)
+    PipeModel(double D, double d, double Q, double L, double maxT, double dx)
     {
-        buffer.current().vars.point_double[0] = vector<double>((L / xStep) + 1, ro_init);
+        this->D = D;
+        this->d = d;
+        this->Q = Q;
+        this->L = L;
+        this->V = abs(4 * Q / (M_PI * pow(D - d, 2)));
+        this->maxT = maxT;
+        this->dx = dx;
+        this->dt = dx / V;
+    }
+};
+
+/// @brief Начальные условия задачи расчета определенного параметра
+struct Problem
+{
+    PipeModel& pipe;
+    string quantity = "Плотность"; // Рассчитываемый параметр
+    double left_cond = 860; // Граничное условие (0; t)
+    double right_cond = 860; // Граничное условие (L; t)
+    double init_cond = 850; // Начальное условие (x, 0)
+
+    Problem(PipeModel& pipeModel, string quantity, double left_cond, double right_cond, double init_cond)
+        : pipe{ pipeModel }
+    {
+        this->quantity = quantity;
+        this->left_cond = left_cond;
+        this->right_cond = right_cond;
+        this->init_cond = init_cond;
     }
 };
 
 
-/// @brief Расчет следующего слоя по свойству самоподобия
-/// @param problem Ссылка на структуру ro_problem
-/// @param curr Ссылка на текущий слой в буфере
-/// @param prev Ссылка на предыдущий слой в буфере
-void step_self_sim(ro_problem& problem, single_var_moc_t& curr, single_var_moc_t& prev)
+class SolverMOC
 {
-    vector<double>& layer = curr.vars.point_double[0];
-    vector<double>& prev_layer = prev.vars.point_double[0];
-    if (problem.Q > 0)
-            {
-                transform(
-                    prev_layer.begin(), // Текущая точка
-                    prev_layer.end() - 1,   // Предыдущая точка
-                    layer.begin() + 1,
-                    [](double a) { return a; }
-                );
-                layer[0] = problem.ro_left; // Дополнение слоя начальным условием
-            }
-            else
-            {
-                transform(
-                    prev_layer.begin() + 1, // Текущая точка
-                    prev_layer.end(),   // Предыдущая точка
-                    layer.begin(),
-                    [](double a) { return a; }
-                );
-                layer.pop_back();
-                layer.push_back(problem.ro_right); // Дополнение слоя начальным условием
-            }        
+private:
+    layer& previousLayer;
+    layer& nextLayer;
+
+public:
+    SolverMOC(layer& prev, layer& next)
+        : previousLayer{ prev },
+        nextLayer{ next }
+    {
+    }
+
+/// @brief Расчет следующего слоя по свойству самоподобия
+/// @param problem Ссылка на структуру задачи расчета параметра
+    void step(Problem& problem)
+    {
+        if (problem.pipe.Q > 0)
+        {
+            transform(
+                previousLayer.begin(), // Текущая точка
+                previousLayer.end() - 1,   // Предыдущая точка
+                nextLayer.begin() + 1,
+                [](double a) { return a; }
+            );
+            nextLayer[0] = problem.left_cond; // Дополнение слоя начальным условием
+        }
+        else
+        {
+            transform(
+                previousLayer.begin() + 1, // Текущая точка
+                previousLayer.end(),   // Предыдущая точка
+                nextLayer.begin(),
+                [](double a) { return a; }
+            );
+            nextLayer.pop_back();
+            nextLayer.push_back(problem.right_cond); // Дополнение слоя начальным условием
+        }
+    }
+};
+
+
+class SolverCorner
+{
+private:
+    layer& previousLayer;
+    layer& nextLayer;
+
+public:
+    SolverCorner(layer& prev, layer& next)
+        : previousLayer{ prev },
+        nextLayer{ next }
+    {
+    }
+
+    /// @brief Расчет следующего слоя уголком
+    /// @param problem Ссылка на структуру задачи расчета параметра
+    void step(Problem& problem)
+    {
+        double sigma = 1 / problem.pipe.V;
+        if (problem.pipe.Q > 0)
+        {
+            transform(
+                previousLayer.begin(), // Текущая точка
+                previousLayer.end() - 1,   // Предыдущая точка
+                previousLayer.begin() + 1,
+                nextLayer.begin() + 1,
+                [&sigma](double a, double b) { return (sigma * a) + ((1 - sigma) * b); }
+            );
+            this->nextLayer[0] = problem.left_cond; // Дополнение слоя начальным условием
+        }
+        else
+        {
+            transform(
+                previousLayer.begin() + 1, // Текущая точка
+                previousLayer.end(),   // Предыдущая точка
+                previousLayer.begin(),
+                nextLayer.begin(),
+                [&sigma](double a, double b) { return (sigma * a) + ((1.0 - sigma) * b); }
+            );
+            nextLayer.pop_back();
+            nextLayer.push_back(problem.right_cond); // Дополнение слоя начальным условием
+        }
+    }
+};
+
+
+/// @brief Вывод текущего слоя в консоль
+/// @param problem Ссылка на структуру задачи расчета параметра
+/// @param currentLayer Ссылка на текущий слой в буфере
+/// @param step Шаг моделирования
+void layerToConsole(vector<Problem>& problems, many_profiles& currentLayer, int step)
+{
+    for (size_t i = 0; i < currentLayer.point_double[0].size(); i++)
+    {
+        printf("Шаг = %d    t = %.3F    x = %.3F    ",
+            step,
+            step * problems[0].pipe.dt,
+            i * problems[0].pipe.dx);
+        for (size_t problemNumber = 0; problemNumber < problems.size(); problemNumber++)
+        {
+            printf("    %s = %.3F",
+                problems[problemNumber].quantity.c_str(),
+                currentLayer.point_double[problemNumber][i]);
+        }
+        printf("\n");
+    }
 }
 
-
-/// @brief Расчет следующего слоя уголком
-/// @param problem Ссылка на структуру ro_problem
-/// @param curr Ссылка на текущий слой в буфере
-/// @param prev Ссылка на предыдущий слой в буфере
-void step_corner(ro_problem& problem, single_var_moc_t& curr, single_var_moc_t& prev)
+/// @brief Вывод описания задачи в консоль
+/// @param problem Ссылка на структуру задачи расчета параметра
+void problemToConsole(Problem& problem)
 {
-    double sigma = 1 / abs(4 * problem.Q / (M_PI * pow(problem.D - problem.d, 2)));
-    
-    vector<double>& layer = curr.vars.point_double[0];
-    vector<double>& prev_layer = prev.vars.point_double[0];
-    
-    
-    if (problem.Q > 0)
-    {
-        transform(
-            prev_layer.begin(), // Текущая точка
-            prev_layer.end() - 1,   // Предыдущая точка
-            prev_layer.begin() + 1,
-            layer.begin() + 1,
-            [&sigma](double a, double b) { return (sigma * a) + ((1 - sigma) * b); }
-        );
-        layer[0] = problem.ro_left; // Дополнение слоя начальным условием
-    }
-    else
-    {
-        transform(
-            prev_layer.begin() + 1, // Текущая точка
-            prev_layer.end(),   // Предыдущая точка
-            prev_layer.begin(),
-            layer.begin(),
-            [&sigma](double a, double b) { return (sigma * a) + ((1.0 - sigma) * b); }
-        );
-        layer.pop_back();
-        layer.push_back(problem.ro_right); // Дополнение слоя начальным условием
-    }
+    cout << "======== Описание задачи ======== " << endl;
+    cout << "Рассчитываемая величина = " << problem.quantity << endl;
+    cout << "Длина трубы = " << problem.pipe.L << endl;
+    cout << "Время моделирования = " << problem.pipe.maxT << endl;
+    cout << "Скорость потока = " << problem.pipe.V << endl;
+    cout << "Шаг по координате = " << problem.pipe.dx << endl;
+    cout << "Шаг во времени = " << problem.pipe.dt << endl;
+    cout << "Число узлов по времени = " << (int)(problem.pipe.maxT / problem.pipe.dt) << endl;
+    cout << "Число узлов по координате = " << (problem.pipe.L / problem.pipe.dx) + 1 << endl << endl;
+    cout << "Начальное условие = " << problem.init_cond << endl;
+    cout << "Левое граничное условие = " << problem.left_cond << endl;
+    cout << "Правое граничное условие = " << problem.right_cond << endl;
+    cout << "================================== "endl;
 }
 
 
 /// @brief Вывод текущего слоя в консоль
-/// @param problem Ссылка на структуру ro_problem
-/// @param curr Ссылка на текущий слой в буфере
-/// @param step Шаг моделирования
-void layer_to_console(ro_problem& problem, single_var_moc_t& curr, int step)
-{
-    double dt = problem.xStep / abs(4 * problem.Q / (M_PI * pow(problem.D - problem.d, 2)));
-    vector<double>& layer = curr.vars.point_double[0];
-    for (size_t i = 0; i < layer.size(); i++)
-            printf("Шаг = %d    t = %.3F    x = %.3F    ro = %.3F\n",
-                step,
-                step * dt,
-                i * problem.xStep,
-                layer[i]);
-}
-
-
-/// @brief Вывод описания задачи в консоль
-/// @param problem Ссылка на структуру ro_problem
-void task_to_console(ro_problem& problem)
-{
-    double dt = problem.xStep / abs(4 * problem.Q / (M_PI * pow(problem.D - problem.d, 2)));
-    cout << "===== Описание задачи ===== " << endl;
-    cout << "Рассчитываемая величина = " << problem.quantity << endl;
-    cout << "Длина трубы = " << problem.L << endl;
-    cout << "Время моделирования = " << problem.maxT << endl;
-    cout << "Скорость потока = " << abs(4 * problem.Q / (M_PI * pow(problem.D - problem.d, 2))) << endl;
-    cout << "Шаг по координате = " << problem.xStep << endl;
-    cout << "Шаг во времени = " << dt << endl;
-    cout << "Число узлов по времени = " << (int)(problem.maxT / dt) << endl;
-    cout << "Число узлов по координате = " << (problem.L / problem.xStep) + 1 << endl;
-    cout << "=========================== " << endl;
-}
-
-
-/// @brief Запись текущего слоя в файл
-/// @param problem Ссылка на структуру ro_problem
-/// @param curr Ссылка на текущий слой в буфере
+/// @param problem Ссылка на структуру задачи расчета параметра
+/// @param currentLayer Ссылка на текущий слой в буфере
 /// @param step Шаг моделирования
 /// @param filename Имя файла
-void layer_to_file(ro_problem& problem, single_var_moc_t& curr, int step, string filename = "data.txt")
+void layerToFile(vector<Problem>& problems, many_profiles& currentLayer, int step, string filename = "data.txt")
 {
-    double dt = problem.xStep / abs(4 * problem.Q / (M_PI * pow(problem.D - problem.d, 2)));
-    vector<double>& layer = curr.vars.point_double[0];
     std::ofstream out;
     if (step == 0)
+    {
         out.open(filename);
+        out << "время" << ',' << "координата";
+        for (size_t problemNumber = 0; problemNumber < problems.size(); problemNumber++)
+            out << ',' << problems[problemNumber].quantity;
+        out << endl;
+    }
     else
         out.open(filename, ios::app);
     if (out.is_open())
-        for (size_t i = 0; i < layer.size(); i++)
+        for (size_t i = 0; i < currentLayer.point_double[0].size(); i++)
         {
-            out << step * dt << ',' << i * problem.xStep << ',' << layer[i] << endl;
+            out << step * problems[0].pipe.dt << ',' << i * problems[0].pipe.dx;
+            for (size_t problemNumber = 0; problemNumber < problems.size(); problemNumber++)
+                out << ',' << currentLayer.point_double[problemNumber][i];
+            out << endl;
         }
     out.close();
 }
 
 
 /// @brief Оболочка для цикла расчета плотности за время maxT
-/// @param problem Ссылка на структуру ro_problem
+/// @param Problem Ссылка на структуру Problem
 /// @param buffer Ссылка на буфер
 /// @param verbose Флаг вывода в консоль
-void calc_ro_problem(ro_problem& problem, custom_buffer_t<single_var_moc_t>& buffer)
+void сalculateProblems(vector<Problem>& problems, custom_buffer_t<many_profiles>& buffer)
 {
-    // Начальное значение параметра
-    problem.set_initial_layer(buffer);
-
-    // Определение числа слоев, которые нужно рассчитать
-    double dt = problem.xStep / abs(4 * problem.Q / (M_PI * pow(problem.D - problem.d, 2)));
-    int numStepsTime = (problem.maxT / dt);
+    int numStepsTime = (problems[0].pipe.maxT / problems[0].pipe.dt);
     
-    // Вывод начальных условий и параметров потока нефтепродуктов
-    task_to_console(problem);
-
-    // Цикл расчета слоев 
     for (size_t step = 0; step <= numStepsTime; step++)
     {
-        // Вывод текущего слоя в консоль
-        layer_to_console(problem, buffer.current(), step);
-        
-        //Запись текущего слоя в файл
-        layer_to_file(problem, buffer.current(), step);
-        
-        buffer.advance(1);
-
-        switch (problem.method)
+        for (size_t problemIndex = 0; problemIndex < problems.size(); problemIndex++)
         {
-            case 0:
+            Problem& problem = problems[problemIndex];
+            layer& previousLayer = buffer.previous().point_double[problemIndex];
+            layer& currentLayer = buffer.current().point_double[problemIndex];
+
+            if (step == 0)
             {
-                step_self_sim(problem, buffer.current(), buffer.previous());
-                break;
+                previousLayer = layer(previousLayer.size(), problem.init_cond);
+                problemToConsole(problem);
             }
-            case 1:
+
+            SolverCorner solver(previousLayer, currentLayer);
+            solver.step(problem); 
+
+            if (problemIndex + 1 == problems.size())
             {
-                step_corner(problem, buffer.current(), buffer.previous());
-                break;
+                layerToConsole(problems, buffer.previous(), step);
+                layerToFile(problems, buffer.previous(), step);
             }
         }
-    }
+        buffer.advance(1);
+    }  
 }
 
 
 int main()
 {
+    PipeModel pipe(0.1, 0.008, 0.01, 10000, 5000, 100);
+    
+    vector<Problem> problems{
+        Problem(pipe, "плотность", 860, 860, 850),
+        Problem(pipe, "сера", 0.9, 0.9, 0.6)
+    };
+  
     // Установка кодировки для вывода кириллицы в консоль
     setlocale(LC_ALL, "Russian"); 
 
     // Для замера времени работы
     clock_t tStart = clock(); 
 
-    // Создание структуры для решаемой задачи
-    ro_problem problem = ro_problem();
 
     // Создание буфера для решаемой задачи
-    custom_buffer_t<single_var_moc_t> buffer(2, int(problem.L / problem.xStep) + 1);
-
+    custom_buffer_t<many_profiles> buffer(2, int(problems[0].pipe.L / problems[0].pipe.dx) + 1);
     // Решение задачи
-    calc_ro_problem(problem, buffer);
+    сalculateProblems(problems, buffer);
 
     printf("Время расчета: %.2fs\n", (double)(clock() - tStart) / CLOCKS_PER_SEC);
 
     // Вызов скрипта построения графиков
-    system("py PlotPrecomputedGraph.py");
+    //system("py PlotPrecomputedGraph.py");
 
     return 0;
 }
