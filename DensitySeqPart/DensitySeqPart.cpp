@@ -184,7 +184,7 @@ void problemToConsole(Problem& problem)
     cout << "Начальное условие = " << problem.init_cond << endl;
     cout << "Левое граничное условие = " << problem.left_cond << endl;
     cout << "Правое граничное условие = " << problem.right_cond << endl;
-    cout << "================================== "endl;
+    cout << "==================================" << endl;
 }
 
 
@@ -256,11 +256,26 @@ void сalculateProblems(vector<Problem>& problems, custom_buffer_t<many_profiles
 
 int main()
 {
-    PipeModel pipe(0.1, 0.008, 0.01, 10000, 5000, 100);
-    
+    double D = 0.1;
+    double d = 0.008;
+    double Q = 0.01;
+    double L = 10000;
+    double maxT = 5000;
+    double dx = 100;
+
+    PipeModel pipe(D, d, Q, L, maxT, dx);
+
+    double leftDensity = 860;
+    double rightDensity = leftDensity;
+    double initialDensity = 850;
+
+    double leftSulfur = 0.9;
+    double rightSulfur = leftSulfur;
+    double initialSulfur = 0.6;
+
     vector<Problem> problems{
-        Problem(pipe, "плотность", 860, 860, 850),
-        Problem(pipe, "сера", 0.9, 0.9, 0.6)
+        Problem(pipe, "плотность", leftDensity, rightDensity, initialDensity),
+        Problem(pipe, "сера", leftSulfur, rightSulfur, initialSulfur)
     };
   
     // Установка кодировки для вывода кириллицы в консоль
